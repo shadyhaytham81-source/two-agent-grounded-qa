@@ -7,6 +7,7 @@ Run with:
 import streamlit as st
 
 import config
+import llm
 from graph.pipeline import run_pipeline
 
 st.set_page_config(page_title=f"Grounded Q&A — {config.CORPUS_NAME}", page_icon="🔎")
@@ -49,7 +50,14 @@ if question := st.chat_input(f"Ask something about {config.CORPUS_NAME}..."):
             try:
                 result = run_pipeline(question)
             except Exception as exc:  # noqa: BLE001
-                st.error(f"Pipeline error: {exc}")
+                if llm._is_rate_limit(exc):
+                    st.warning(
+                        "The free LLM tier is rate limited and is currently busy "
+                        "(this also happens while the 100-question test suite is "
+                        "running). Wait a few seconds and ask again."
+                    )
+                else:
+                    st.error(f"Pipeline error: {exc}")
                 st.stop()
 
         st.markdown(result["final_answer"])
