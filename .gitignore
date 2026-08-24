@@ -20,3 +20,6 @@ env/
 # local caches
 .cache/
 *.log
+
+# local editor/launch config
+.claude/
