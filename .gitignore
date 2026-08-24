@@ -1,3 +1,6 @@
+# corpus — the book PDF is copyrighted; never commit or redistribute it
+corpus/*.pdf
+
 # secrets
 .env
 

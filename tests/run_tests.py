@@ -47,9 +47,8 @@ def run(questions: list[dict], delay: float) -> list[dict]:
                 {
                     "retrieved_chunks": [
                         {
-                            "source": p.get("source"),
                             "title": p.get("title"),
-                            "url": p.get("url"),
+                            "page": p.get("page"),
                             "score": p.get("score"),
                             "text_snippet": p.get("text", "")[:300],
                         }
@@ -109,8 +108,7 @@ def write_logs(results: list[dict]):
                 continue
             f.write(f"  Retrieved chunks ({len(r['retrieved_chunks'])}):\n")
             for c in r["retrieved_chunks"]:
-                f.write(f"    - [{c['source']}] {c['title']} (score {c['score']})\n")
-                f.write(f"      {c['url']}\n")
+                f.write(f"    - {c['title']} p.{c['page']} (score {c['score']})\n")
                 f.write(f"      {c['text_snippet']!r}\n")
             f.write(f"  Draft (revisions: {r['revision_count']}): {r['draft']}\n")
             f.write(f"  Reviewer verdict: {r['reviewer_verdict']} — {r['reviewer_feedback']}\n")
@@ -161,7 +159,7 @@ def main():
     parser.add_argument(
         "--delay",
         type=float,
-        default=8.0,
+        default=2.0,
         help="Seconds to wait between questions — free LLM tiers are rate limited",
     )
     args = parser.parse_args()

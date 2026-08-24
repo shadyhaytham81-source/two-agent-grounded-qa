@@ -24,7 +24,7 @@ def get_embedder() -> SentenceTransformer:
 def retrieve_passages(query: str, top_k: int = None) -> list[dict]:
     """
     Embeds `query` and searches the remote Qdrant collection.
-    Returns a list of dicts: {text, title, url, source, chunk_index, score},
+    Returns a list of dicts: {text, title, page, chunk_index, score},
     filtered to results at or above config.MIN_RELEVANCE_SCORE.
     """
     top_k = top_k or config.TOP_K_PASSAGES
@@ -44,9 +44,8 @@ def retrieve_passages(query: str, top_k: int = None) -> list[dict]:
     return [
         {
             "text": hit.payload.get("text", ""),
-            "title": hit.payload.get("title", "Untitled"),
-            "url": hit.payload.get("url", ""),
-            "source": hit.payload.get("source", ""),
+            "title": hit.payload.get("title", config.CORPUS_NAME),
+            "page": hit.payload.get("page"),
             "chunk_index": hit.payload.get("chunk_index"),
             "score": round(hit.score, 3),
         }
