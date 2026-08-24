@@ -63,7 +63,7 @@ orchestrated as a LangGraph state machine with a genuine conditional handoff.
 |---|---|---|
 | Vector DB | **Qdrant Cloud** (remote cluster) | required by the brief; URL + API key via env vars |
 | Orchestration | **LangGraph** | conditional handoff + revision loop, not a linear chain |
-| LLM (both agents) | **Groq** (default) or **Google Gemini** | both have a free tier with **no credit card required** |
+| LLM (both agents) | **Groq** `openai/gpt-oss-120b` (default) or **Google Gemini** | both have a free tier with **no credit card required** |
 | Embeddings | `sentence-transformers` / `all-MiniLM-L6-v2` | runs **locally** — no API key, no cost, 384 dims |
 | Ingestion | `requests` + each site's Markdown endpoint | no HTML scraping heuristics needed |
 | UI | **Streamlit** | required by the brief |

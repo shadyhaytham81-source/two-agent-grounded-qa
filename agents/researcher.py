@@ -80,7 +80,7 @@ def draft_answer(query: str, passages: list[dict]) -> str:
     return llm.complete(
         system=DRAFT_SYSTEM_PROMPT,
         user=f"Question: {query}\n\nRetrieved passages:\n{format_passages(passages)}",
-        max_tokens=1000,
+        max_tokens=2000,
     )
 
 
@@ -95,5 +95,5 @@ def revise_answer(
             f"Previous draft:\n{previous_draft}\n\n"
             f"Reviewer feedback:\n{reviewer_feedback}"
         ),
-        max_tokens=1000,
+        max_tokens=2000,
     )

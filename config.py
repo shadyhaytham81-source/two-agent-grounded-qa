@@ -25,7 +25,7 @@ def _require(name: str) -> str:
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "groq").strip().lower()
 
 _DEFAULT_MODELS = {
-    "groq": "llama-3.3-70b-versatile",
+    "groq": "openai/gpt-oss-120b",
     "gemini": "gemini-2.0-flash",
 }
 if LLM_PROVIDER not in _DEFAULT_MODELS:
@@ -35,6 +35,9 @@ if LLM_PROVIDER not in _DEFAULT_MODELS:
 
 LLM_MODEL = os.getenv("LLM_MODEL") or _DEFAULT_MODELS[LLM_PROVIDER]
 GROQ_API_KEY = _require("GROQ_API_KEY") if LLM_PROVIDER == "groq" else os.getenv("GROQ_API_KEY")
+# Only sent for gpt-oss models, which reason before answering. Reasoning
+# tokens count against max_tokens, so "low" keeps the budget on the answer.
+GROQ_REASONING_EFFORT = os.getenv("GROQ_REASONING_EFFORT", "low")
 GEMINI_API_KEY = _require("GEMINI_API_KEY") if LLM_PROVIDER == "gemini" else os.getenv("GEMINI_API_KEY")
 
 # ---- Qdrant (remote cluster) ----

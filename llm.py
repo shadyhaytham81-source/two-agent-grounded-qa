@@ -33,6 +33,13 @@ def complete(system: str, user: str, max_tokens: int = 1000, temperature: float 
     both the draft and the review verdict matters more than variety.
     """
     if config.LLM_PROVIDER == "groq":
+        extra = {}
+        # gpt-oss models reason before answering, and the reasoning tokens are
+        # billed against max_tokens. Keep the effort low so the budget goes to
+        # the answer — without this a small max_tokens returns empty content.
+        if "gpt-oss" in config.LLM_MODEL:
+            extra["reasoning_effort"] = config.GROQ_REASONING_EFFORT
+
         response = _groq_client().chat.completions.create(
             model=config.LLM_MODEL,
             max_tokens=max_tokens,
@@ -41,6 +48,7 @@ def complete(system: str, user: str, max_tokens: int = 1000, temperature: float 
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
             ],
+            **extra,
         )
         return (response.choices[0].message.content or "").strip()
 

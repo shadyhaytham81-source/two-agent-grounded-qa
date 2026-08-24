@@ -48,7 +48,7 @@ def main() -> int:
         reply = llm.complete(
             system="You are a connectivity test. Reply with one word.",
             user="Reply with the single word: ready",
-            max_tokens=16,
+            max_tokens=200,
         )
         ok(f"{config.LLM_MODEL} responded: {reply!r}")
     except Exception as exc:  # noqa: BLE001

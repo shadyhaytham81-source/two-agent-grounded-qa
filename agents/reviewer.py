@@ -85,7 +85,7 @@ def review(query: str, draft: str, passages: list[dict]) -> dict:
             f"Retrieved passages:\n{format_passages(passages)}\n\n"
             f"Draft answer:\n{draft}"
         ),
-        max_tokens=800,
+        max_tokens=1500,
     )
     result = _safe_parse(raw)
     result.setdefault("verdict", "NOT_GROUNDED")
