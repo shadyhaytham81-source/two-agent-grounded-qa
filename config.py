@@ -43,31 +43,15 @@ GEMINI_API_KEY = _require("GEMINI_API_KEY") if LLM_PROVIDER == "gemini" else os.
 # ---- Qdrant (remote cluster) ----
 QDRANT_URL = _require("QDRANT_URL")
 QDRANT_API_KEY = _require("QDRANT_API_KEY")
-QDRANT_COLLECTION_NAME = os.getenv("QDRANT_COLLECTION_NAME", "langchain_qdrant_docs")
+QDRANT_COLLECTION_NAME = os.getenv("QDRANT_COLLECTION_NAME", "rich_dad_poor_dad")
 
 # ---- Embeddings (run locally — no API key, no cost) ----
 EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL_NAME", "all-MiniLM-L6-v2")
 EMBEDDING_DIM = 384  # matches all-MiniLM-L6-v2; update if you swap embedding models
 
-# ---- Corpus: the two documentation sites that get ingested ----
-CORPUS_NAME = "the LangChain and Qdrant documentation"
-
-# Each entry: sitemap to enumerate, the path prefix that marks a docs page, and
-# the label stored on every chunk so answers can cite which product a passage
-# came from. Both sites serve a clean Markdown version of every page, which is
-# what the ingester actually downloads (see ingestion/ingest_docs.py).
-DOC_SOURCES = [
-    {
-        "source": "langchain",
-        "sitemap": "https://docs.langchain.com/sitemap.xml",
-        "include_prefix": "https://docs.langchain.com/oss/python/",
-    },
-    {
-        "source": "qdrant",
-        "sitemap": "https://qdrant.tech/sitemap.xml",
-        "include_prefix": "https://qdrant.tech/documentation/",
-    },
-]
+# ---- Corpus (local PDF — never committed to git, see .gitignore) ----
+CORPUS_NAME = os.getenv("CORPUS_NAME", "Rich Dad Poor Dad")
+BOOK_PDF_PATH = os.getenv("BOOK_PDF_PATH", "corpus/rich_dad_poor_dad.pdf")
 
 CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "800"))
 CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "120"))
