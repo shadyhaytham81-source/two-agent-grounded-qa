@@ -53,6 +53,7 @@ retrieved evidence doesn't support.
 ```
 grounded-qa-assistant/
 ├── app.py                    # Streamlit chat UI
+├── check_setup.py             # pre-flight check for .env / PDF / Anthropic / Qdrant
 ├── config.py                  # loads all settings from environment variables
 ├── retrieval.py                # Qdrant + embedding search helper
 ├── agents/
@@ -78,11 +79,14 @@ grounded-qa-assistant/
 
 ### 1. Clone and create a virtual environment
 
+Requires **Python 3.10–3.12** (`sentence-transformers` pulls in PyTorch,
+which does not yet publish wheels for 3.13+).
+
 ```bash
 git clone <your-repo-url>
 cd grounded-qa-assistant
-python3 -m venv venv
-source venv/bin/activate      # Windows: venv\Scripts\activate
+python3.11 -m venv .venv
+source .venv/bin/activate     # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
@@ -112,6 +116,21 @@ cp .env.example .env
 
 Fill in `.env` with `ANTHROPIC_API_KEY`, `QDRANT_URL`, and `QDRANT_API_KEY`.
 Everything else has sensible defaults. **Never commit `.env`.**
+
+`ANTHROPIC_MODEL` defaults to `claude-opus-5`. Both agents run on it; set it
+to `claude-sonnet-5` if you'd rather trade a little accuracy for a cheaper
+100-question test run.
+
+### 5b. Verify the setup before ingesting
+
+```bash
+python check_setup.py
+```
+
+This checks the `.env` variables, that the PDF exists and has an extractable
+text layer, that the Anthropic key works, and that the Qdrant cluster is
+reachable — so a misconfiguration surfaces here rather than halfway through
+ingestion.
 
 ### 6. Ingest the PDF
 

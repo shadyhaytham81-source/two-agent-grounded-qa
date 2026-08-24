@@ -33,11 +33,12 @@ def retrieve_passages(query: str, top_k: int = None) -> list[dict]:
 
     query_vector = embedder.encode(query).tolist()
 
-    hits = client.search(
+    response = client.query_points(
         collection_name=config.QDRANT_COLLECTION_NAME,
-        query_vector=query_vector,
+        query=query_vector,
         limit=top_k,
         score_threshold=config.MIN_RELEVANCE_SCORE,
+        with_payload=True,
     )
 
     return [
@@ -48,5 +49,5 @@ def retrieve_passages(query: str, top_k: int = None) -> list[dict]:
             "chunk_index": hit.payload.get("chunk_index"),
             "score": round(hit.score, 3),
         }
-        for hit in hits
+        for hit in response.points
     ]

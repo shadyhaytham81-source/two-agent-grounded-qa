@@ -20,12 +20,12 @@ def _require(name: str) -> str:
 
 # ---- Anthropic ----
 ANTHROPIC_API_KEY = _require("ANTHROPIC_API_KEY")
-ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6")
+ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-opus-5")
 
 # ---- Qdrant (remote cluster) ----
 QDRANT_URL = _require("QDRANT_URL")
 QDRANT_API_KEY = _require("QDRANT_API_KEY")
-QDRANT_COLLECTION_NAME = os.getenv("QDRANT_COLLECTION_NAME", "langchain_qdrant_docs")
+QDRANT_COLLECTION_NAME = os.getenv("QDRANT_COLLECTION_NAME", "rich_dad_poor_dad")
 
 # ---- Embeddings ----
 EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL_NAME", "all-MiniLM-L6-v2")
