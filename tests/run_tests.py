@@ -1,24 +1,25 @@
 """
 Runs all 100 test questions (tests/test_questions.py) through the live
-Researcher/Reviewer pipeline against your real Qdrant collection + Anthropic
-API, and writes two log files under tests/logs/:
+Researcher/Reviewer pipeline against your real Qdrant collection and LLM
+provider, and writes three log files under tests/logs/:
 
   - test_run_<timestamp>.jsonl   machine-readable, one JSON object per line:
                                   {id, category, question, retrieved_chunks,
                                    draft, revision_count, reviewer_verdict,
-                                   reviewer_feedback, final_answer,
-                                   final_verdict, elapsed_seconds, error}
-  - test_run_<timestamp>.txt     human-readable transcript of the same runs,
-                                  for quick manual review.
+                                   reviewer_feedback, unsupported_claims,
+                                   final_answer, final_verdict,
+                                   elapsed_seconds, error}
+  - test_run_<timestamp>.txt     human-readable transcript of the same runs
+  - test_run_<timestamp>_summary.txt   per-category counts
 
-Requires a real .env (ANTHROPIC_API_KEY, QDRANT_URL, QDRANT_API_KEY) and a
-collection that's already been ingested via ingestion/ingest_pdf.py — this
-makes real API calls and costs a small amount of Anthropic usage.
+Requires a filled-in .env and a collection that has already been ingested via
+ingestion/ingest_docs.py.
 
 Usage:
     python -m tests.run_tests
-    python -m tests.run_tests --limit 10          # quick smoke test
+    python -m tests.run_tests --limit 10               # quick smoke test
     python -m tests.run_tests --category out_of_scope
+    python -m tests.run_tests --delay 4                # slow down for free-tier rate limits
 """
 import argparse
 import json
@@ -34,26 +35,23 @@ from tests.test_questions import TEST_QUESTIONS
 LOG_DIR = Path("tests/logs")
 
 
-def run(questions: list[dict]) -> list[dict]:
+def run(questions: list[dict], delay: float) -> list[dict]:
     results = []
     for n, q in enumerate(questions, start=1):
         print(f"[{n}/{len(questions)}] ({q['category']}) {q['question']}")
         start = time.time()
-        record = {
-            "id": q["id"],
-            "category": q["category"],
-            "question": q["question"],
-        }
+        record = {"id": q["id"], "category": q["category"], "question": q["question"]}
         try:
             state = run_pipeline(q["question"])
             record.update(
                 {
                     "retrieved_chunks": [
                         {
-                            "title": p["title"],
-                            "page": p.get("page"),
-                            "score": p["score"],
-                            "text_snippet": p["text"][:300],
+                            "source": p.get("source"),
+                            "title": p.get("title"),
+                            "url": p.get("url"),
+                            "score": p.get("score"),
+                            "text_snippet": p.get("text", "")[:300],
                         }
                         for p in state.get("passages", [])
                     ],
@@ -61,6 +59,7 @@ def run(questions: list[dict]) -> list[dict]:
                     "revision_count": state.get("revision_count", 0),
                     "reviewer_verdict": state.get("reviewer_verdict"),
                     "reviewer_feedback": state.get("reviewer_feedback"),
+                    "unsupported_claims": state.get("unsupported_claims", []),
                     "final_answer": state.get("final_answer"),
                     "final_verdict": state.get("final_verdict"),
                     "error": None,
@@ -75,14 +74,17 @@ def run(questions: list[dict]) -> list[dict]:
                     "revision_count": None,
                     "reviewer_verdict": None,
                     "reviewer_feedback": None,
+                    "unsupported_claims": [],
                     "final_answer": None,
                     "final_verdict": None,
-                    "error": str(exc),
+                    "error": f"{type(exc).__name__}: {exc}",
                 }
             )
             print(f"    -> ERROR: {exc}")
         record["elapsed_seconds"] = round(time.time() - start, 2)
         results.append(record)
+        if delay and n < len(questions):
+            time.sleep(delay)
     return results
 
 
@@ -107,9 +109,13 @@ def write_logs(results: list[dict]):
                 continue
             f.write(f"  Retrieved chunks ({len(r['retrieved_chunks'])}):\n")
             for c in r["retrieved_chunks"]:
-                f.write(f"    - {c['title']} p.{c['page']} (score {c['score']}): {c['text_snippet']!r}\n")
+                f.write(f"    - [{c['source']}] {c['title']} (score {c['score']})\n")
+                f.write(f"      {c['url']}\n")
+                f.write(f"      {c['text_snippet']!r}\n")
             f.write(f"  Draft (revisions: {r['revision_count']}): {r['draft']}\n")
             f.write(f"  Reviewer verdict: {r['reviewer_verdict']} — {r['reviewer_feedback']}\n")
+            if r["unsupported_claims"]:
+                f.write(f"  Unsupported claims flagged: {r['unsupported_claims']}\n")
             f.write(f"  FINAL ANSWER: {r['final_answer']}\n")
             f.write(f"  UI verdict label: {r['final_verdict']}\n")
             f.write(f"  Elapsed: {r['elapsed_seconds']}s\n\n")
@@ -118,31 +124,46 @@ def write_logs(results: list[dict]):
     by_category: dict[str, dict[str, int]] = {}
     for r in results:
         cat = r["category"]
-        by_category.setdefault(cat, {"total": 0, "grounded": 0, "caution": 0, "error": 0})
-        by_category[cat]["total"] += 1
+        stats = by_category.setdefault(
+            cat, {"total": 0, "grounded": 0, "caution": 0, "refused": 0, "error": 0}
+        )
+        stats["total"] += 1
         if r["error"]:
-            by_category[cat]["error"] += 1
-        elif r["final_verdict"] and "✅" in r["final_verdict"]:
-            by_category[cat]["grounded"] += 1
+            stats["error"] += 1
+            continue
+        if not r["retrieved_chunks"] or r["draft"] == "NOT_GROUNDED":
+            stats["refused"] += 1
+        if r["final_verdict"] and "✅" in r["final_verdict"]:
+            stats["grounded"] += 1
         elif r["final_verdict"]:
-            by_category[cat]["caution"] += 1
+            stats["caution"] += 1
 
     with open(summary_path, "w", encoding="utf-8") as f:
         f.write(f"Summary — {timestamp}\n\n")
-        f.write(f"{'category':<24}{'total':>8}{'grounded':>10}{'caution':>10}{'error':>8}\n")
-        for cat, counts in by_category.items():
+        f.write(
+            f"{'category':<24}{'total':>8}{'grounded':>10}{'caution':>10}"
+            f"{'refused':>10}{'error':>8}\n"
+        )
+        for cat, c in by_category.items():
             f.write(
-                f"{cat:<24}{counts['total']:>8}{counts['grounded']:>10}"
-                f"{counts['caution']:>10}{counts['error']:>8}\n"
+                f"{cat:<24}{c['total']:>8}{c['grounded']:>10}{c['caution']:>10}"
+                f"{c['refused']:>10}{c['error']:>8}\n"
             )
 
     print(f"\nLogs written:\n  {jsonl_path}\n  {txt_path}\n  {summary_path}")
+    return summary_path
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--limit", type=int, default=None, help="Only run the first N questions")
-    parser.add_argument("--category", type=str, default=None, help="Only run questions in this category")
+    parser.add_argument("--category", type=str, default=None, help="Only run this category")
+    parser.add_argument(
+        "--delay",
+        type=float,
+        default=2.0,
+        help="Seconds to wait between questions — free LLM tiers are rate limited",
+    )
     args = parser.parse_args()
 
     questions = TEST_QUESTIONS
@@ -155,8 +176,10 @@ def main():
         print("No questions matched the given filters.")
         return
 
-    results = run(questions)
-    write_logs(results)
+    results = run(questions, delay=args.delay)
+    summary_path = write_logs(results)
+    print()
+    print(summary_path.read_text())
 
 
 if __name__ == "__main__":

@@ -1,9 +1,6 @@
 # secrets
 .env
 
-# corpus — the book PDF is copyrighted; never commit/redistribute it
-corpus/*.pdf
-
 # python
 __pycache__/
 *.pyc

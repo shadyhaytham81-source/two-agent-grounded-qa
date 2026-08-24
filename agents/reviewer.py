@@ -10,29 +10,26 @@ Responsibilities:
 import json
 import re
 
-from anthropic import Anthropic
-
 import config
-
-_client = Anthropic(api_key=config.ANTHROPIC_API_KEY)
+import llm
+from agents.researcher import format_passages
 
 REVIEW_SYSTEM_PROMPT = f"""You are the Reviewer agent in a grounded Q&A system \
-answering questions about "{config.CORPUS_NAME}". You are a strict, skeptical \
+answering questions about {config.CORPUS_NAME}. You are a strict, skeptical \
 fact-checker — your only job is to catch claims that are NOT actually \
-supported by the provided passages, even if they sound plausible, are \
-well-known about the book, or are generally true in the real world.
+supported by the provided passages, even if they sound plausible or are \
+generally true about LangChain, Qdrant, or software in general.
 
 You will get the user's question, the numbered passages that were retrieved, \
 and a draft answer that cites them like [1], [2].
 
 For each factual claim in the draft, check:
 1. Is this specific claim actually stated or directly implied by the cited \
-passage(s)? Citation-shopping (citing a passage that's topically related but \
-doesn't actually support the specific claim) counts as NOT grounded.
-2. Does the draft quote more than ~10 words verbatim from any passage, or \
-quote the same passage more than once? Flag that as a copyright violation in \
-unsupported_claims even if the content itself is accurate — it should be \
-paraphrased instead.
+passage(s)? Citation-shopping — citing a passage that is topically related \
+but does not support the specific claim — counts as NOT grounded.
+2. Are all API names, parameters, method names, and configuration keys in the \
+draft literally present in the passages? A plausible-looking invented \
+parameter is the most important failure to catch.
 
 Respond with ONLY a JSON object, no markdown fences, no preamble, in exactly \
 this shape:
@@ -43,51 +40,57 @@ this shape:
 }}
 
 If the draft is "NOT_GROUNDED" (a refusal), verdict is "GROUNDED" — a correct \
-refusal doesn't need fixing. If every claim is well-supported and no \
-over-quoting occurred, verdict is "GROUNDED" and unsupported_claims is an \
-empty list.
+refusal does not need fixing. If every claim is well-supported, verdict is \
+"GROUNDED" and unsupported_claims is an empty list.
 """
 
-
-def _format_passages(passages: list[dict]) -> str:
-    lines = []
-    for i, p in enumerate(passages, start=1):
-        lines.append(f"[{i}] (source: {p['title']}, page {p['page']})\n{p['text']}")
-    return "\n\n".join(lines)
+_FENCE = re.compile(r"^```(?:json)?\s*|\s*```$", re.MULTILINE)
+_OBJECT = re.compile(r"\{.*\}", re.DOTALL)
 
 
 def _safe_parse(raw: str) -> dict:
-    cleaned = re.sub(r"^```(json)?|```$", "", raw.strip(), flags=re.MULTILINE).strip()
+    cleaned = _FENCE.sub("", raw.strip()).strip()
     try:
         return json.loads(cleaned)
     except json.JSONDecodeError:
-        # Fail safe: if the reviewer's own output is malformed, don't silently
-        # approve — flag it so the graph treats it as needing another look.
-        return {
-            "verdict": "NOT_GROUNDED",
-            "unsupported_claims": [],
-            "feedback": f"Reviewer output could not be parsed as JSON: {raw[:300]}",
-        }
+        pass
+    # Some models wrap the JSON in a sentence — take the outermost object.
+    match = _OBJECT.search(cleaned)
+    if match:
+        try:
+            return json.loads(match.group(0))
+        except json.JSONDecodeError:
+            pass
+    # Fail safe: if the reviewer's own output is malformed, don't silently
+    # approve — flag it so the graph treats it as needing another look.
+    return {
+        "verdict": "NOT_GROUNDED",
+        "unsupported_claims": [],
+        "feedback": f"Reviewer output could not be parsed as JSON: {raw[:300]}",
+    }
 
 
 def review(query: str, draft: str, passages: list[dict]) -> dict:
     if draft.strip() == "NOT_GROUNDED":
-        return {"verdict": "GROUNDED", "unsupported_claims": [], "feedback": "Correct refusal — no passages supported the question."}
+        return {
+            "verdict": "GROUNDED",
+            "unsupported_claims": [],
+            "feedback": "Correct refusal — no passages supported the question.",
+        }
 
-    passages_block = _format_passages(passages)
-    response = _client.messages.create(
-        model=config.ANTHROPIC_MODEL,
-        max_tokens=800,
+    raw = llm.complete(
         system=REVIEW_SYSTEM_PROMPT,
-        messages=[
-            {
-                "role": "user",
-                "content": (
-                    f"Question: {query}\n\n"
-                    f"Retrieved passages:\n{passages_block}\n\n"
-                    f"Draft answer:\n{draft}"
-                ),
-            }
-        ],
+        user=(
+            f"Question: {query}\n\n"
+            f"Retrieved passages:\n{format_passages(passages)}\n\n"
+            f"Draft answer:\n{draft}"
+        ),
+        max_tokens=800,
     )
-    return _safe_parse(response.content[0].text)
+    result = _safe_parse(raw)
+    result.setdefault("verdict", "NOT_GROUNDED")
+    result.setdefault("unsupported_claims", [])
+    result.setdefault("feedback", "")
+    if result["verdict"] not in ("GROUNDED", "NOT_GROUNDED"):
+        result["verdict"] = "NOT_GROUNDED"
+    return result
