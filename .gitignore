@@ -1,0 +1,25 @@
+# secrets
+.env
+
+# corpus — the book PDF is copyrighted; never commit/redistribute it
+corpus/*.pdf
+
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+env/
+*.egg-info/
+
+# streamlit
+.streamlit/secrets.toml
+
+# os / editor junk
+.DS_Store
+.vscode/
+.idea/
+
+# local caches
+.cache/
+*.log
