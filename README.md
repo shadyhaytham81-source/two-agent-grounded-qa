@@ -75,7 +75,7 @@ Everything in this project is free to run.
 ## Project structure
 
 ```
-grounded-qa-assistant/
+langchain-qdrant-grounded-qa/
 ├── app.py                     # Streamlit chat UI
 ├── check_setup.py             # pre-flight check for .env / LLM / Qdrant
 ├── config.py                  # all settings loaded from environment variables
@@ -108,8 +108,8 @@ Requires **Python 3.10–3.12** (`sentence-transformers` pulls in PyTorch, which
 does not publish wheels for 3.13+ yet).
 
 ```bash
-git clone https://github.com/shadyhaytham81-source/grounded-qa-assistant.git
-cd grounded-qa-assistant
+git clone https://github.com/shadyhaytham81-source/langchain-qdrant-grounded-qa.git
+cd langchain-qdrant-grounded-qa
 python3.11 -m venv .venv
 source .venv/bin/activate      # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
