@@ -1,9 +1,6 @@
 # secrets
 .env
 
-# corpus — the book PDF is copyrighted; never commit or redistribute it
-corpus/*.pdf
-
 # python
 __pycache__/
 *.pyc
@@ -23,6 +20,3 @@ env/
 # local caches
 .cache/
 *.log
-
-# local editor/launch config
-.claude/
