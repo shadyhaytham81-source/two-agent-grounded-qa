@@ -16,8 +16,15 @@ from functools import lru_cache
 
 import config
 
-# "Please try again in 9.7425s" — providers put the wait in the error message.
-_RETRY_AFTER = re.compile(r"try again in ([0-9.]+)\s*s", re.IGNORECASE)
+# Providers put the wait in the error message, in either of two shapes:
+# "try again in 9.7425s" or "try again in 14m43.872s".
+_RETRY_AFTER = re.compile(
+    r"try again in (?:([0-9]+)m)?([0-9.]+)\s*s", re.IGNORECASE
+)
+
+# Some open models write a visible reasoning block before the answer. Strip it
+# centrally so the agents never have to know which model they are talking to.
+_THINK_BLOCK = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
 MAX_RATE_LIMIT_RETRIES = 5
 
 
@@ -38,11 +45,18 @@ def _gemini_client():
 def _wait_seconds(exc: Exception, attempt: int) -> float:
     match = _RETRY_AFTER.search(str(exc))
     if match:
-        return float(match.group(1)) + 1.0  # small cushion past the stated window
+        minutes = int(match.group(1) or 0)
+        return minutes * 60 + float(match.group(2)) + 1.0  # cushion past the window
     return min(2 ** attempt, 60)  # exponential fallback when nothing is stated
 
 
-def complete(system: str, user: str, max_tokens: int = 1000, temperature: float = 0.0) -> str:
+def complete(
+    system: str,
+    user: str,
+    max_tokens: int = 1000,
+    temperature: float = 0.0,
+    model: str | None = None,
+) -> str:
     """
     Sends one system+user turn to the configured LLM and returns the text.
 
@@ -56,7 +70,7 @@ def complete(system: str, user: str, max_tokens: int = 1000, temperature: float 
     last_exc: Exception | None = None
     for attempt in range(MAX_RATE_LIMIT_RETRIES):
         try:
-            return _complete_once(system, user, max_tokens, temperature)
+            return _complete_once(system, user, max_tokens, temperature, model or config.LLM_MODEL)
         except Exception as exc:  # noqa: BLE001 — re-raised below unless rate limited
             if not _is_rate_limit(exc):
                 raise
@@ -67,6 +81,10 @@ def complete(system: str, user: str, max_tokens: int = 1000, temperature: float 
     raise last_exc  # type: ignore[misc]
 
 
+def _strip_reasoning(text: str | None) -> str:
+    return _THINK_BLOCK.sub("", text or "").strip()
+
+
 def _is_rate_limit(exc: Exception) -> bool:
     if getattr(exc, "status_code", None) == 429:
         return True
@@ -74,17 +92,17 @@ def _is_rate_limit(exc: Exception) -> bool:
     return "rate limit" in text or "429" in text or "resource_exhausted" in text
 
 
-def _complete_once(system: str, user: str, max_tokens: int, temperature: float) -> str:
+def _complete_once(system: str, user: str, max_tokens: int, temperature: float, model: str) -> str:
     if config.LLM_PROVIDER == "groq":
         extra = {}
         # gpt-oss models reason before answering, and the reasoning tokens are
         # billed against max_tokens. Keep the effort low so the budget goes to
         # the answer — without this a small max_tokens returns empty content.
-        if "gpt-oss" in config.LLM_MODEL:
+        if "gpt-oss" in model:
             extra["reasoning_effort"] = config.GROQ_REASONING_EFFORT
 
         response = _groq_client().chat.completions.create(
-            model=config.LLM_MODEL,
+            model=model,
             max_tokens=max_tokens,
             temperature=temperature,
             messages=[
@@ -93,12 +111,12 @@ def _complete_once(system: str, user: str, max_tokens: int, temperature: float) 
             ],
             **extra,
         )
-        return (response.choices[0].message.content or "").strip()
+        return _strip_reasoning(response.choices[0].message.content)
 
     from google.genai import types
 
     response = _gemini_client().models.generate_content(
-        model=config.LLM_MODEL,
+        model=model,
         contents=user,
         config=types.GenerateContentConfig(
             system_instruction=system,
@@ -106,4 +124,4 @@ def _complete_once(system: str, user: str, max_tokens: int, temperature: float) 
             temperature=temperature,
         ),
     )
-    return (response.text or "").strip()
+    return _strip_reasoning(response.text)

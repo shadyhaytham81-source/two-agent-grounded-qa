@@ -25,7 +25,7 @@ def _require(name: str) -> str:
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "groq").strip().lower()
 
 _DEFAULT_MODELS = {
-    "groq": "openai/gpt-oss-120b",
+    "groq": "openai/gpt-oss-20b",
     "gemini": "gemini-2.0-flash",
 }
 if LLM_PROVIDER not in _DEFAULT_MODELS:
@@ -34,6 +34,11 @@ if LLM_PROVIDER not in _DEFAULT_MODELS:
     )
 
 LLM_MODEL = os.getenv("LLM_MODEL") or _DEFAULT_MODELS[LLM_PROVIDER]
+# The Reviewer may run on a different model than the Researcher. Two reasons:
+# a second model has its own independent blind spots, so it catches errors a
+# model is inclined to miss in its own writing; and on a free tier each model
+# carries its own quota, so splitting the two agents doubles the daily budget.
+REVIEWER_MODEL = os.getenv("REVIEWER_MODEL") or LLM_MODEL
 GROQ_API_KEY = _require("GROQ_API_KEY") if LLM_PROVIDER == "groq" else os.getenv("GROQ_API_KEY")
 # Only sent for gpt-oss models, which reason before answering. Reasoning
 # tokens count against max_tokens, so "low" keeps the budget on the answer.

@@ -88,6 +88,7 @@ def review(query: str, draft: str, passages: list[dict]) -> dict:
             f"Draft answer:\n{draft}"
         ),
         max_tokens=1500,
+        model=config.REVIEWER_MODEL,
     )
     result = _safe_parse(raw)
     result.setdefault("verdict", "NOT_GROUNDED")
