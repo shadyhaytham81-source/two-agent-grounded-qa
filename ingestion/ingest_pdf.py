@@ -6,6 +6,9 @@ Run once (or whenever you want to re-ingest):
 
 Pipeline:
   1. Extract text page-by-page from the local PDF (pdfplumber)
+  1b. Strip running headers/footers — lines that repeat on most pages (page
+      furniture, watermarks). Left in, they start nearly every chunk with
+      identical text, which blurs the embeddings and hurts retrieval.
   2. Split each page into overlapping chunks, keeping the page number as metadata
   3. Embed chunks locally with sentence-transformers (no external API key needed)
   4. Upsert into the remote Qdrant collection with source metadata (title + page)
@@ -19,6 +22,7 @@ import argparse
 import os
 import sys
 import uuid
+from collections import Counter
 
 import pdfplumber
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -43,6 +47,34 @@ def build_collection(client: QdrantClient, recreate: bool = False):
         vectors_config=qmodels.VectorParams(size=config.EMBEDDING_DIM, distance=qmodels.Distance.COSINE),
     )
     print(f"Created collection '{config.QDRANT_COLLECTION_NAME}'.")
+
+
+def strip_repeated_lines(pages: list[tuple[int, str]], threshold: float = 0.5):
+    """
+    Drops lines that appear on more than `threshold` of the pages.
+
+    Running headers, footers and watermarks repeat on nearly every page. They
+    carry no information, but they would otherwise be prepended to almost
+    every chunk and pull all the embeddings toward each other.
+    """
+    if not pages:
+        return pages, []
+
+    counts = Counter()
+    for _, text in pages:
+        for line in {ln.strip() for ln in text.splitlines() if ln.strip()}:
+            counts[line] += 1
+
+    cutoff = len(pages) * threshold
+    boilerplate = {line for line, n in counts.items() if n > cutoff}
+
+    cleaned = []
+    for page_num, text in pages:
+        kept = [ln for ln in text.splitlines() if ln.strip() not in boilerplate]
+        body = "\n".join(kept).strip()
+        if body:
+            cleaned.append((page_num, body))
+    return cleaned, sorted(boilerplate)
 
 
 def extract_pages(pdf_path: str) -> list[tuple[int, str]]:
@@ -87,6 +119,13 @@ def main():
             "OCR it first (see the pdf-reading approach for scanned documents)."
         )
     print(f"  {len(pages)} pages with extractable text.")
+
+    pages, boilerplate = strip_repeated_lines(pages)
+    if boilerplate:
+        print(f"  Stripped {len(boilerplate)} running header/footer line(s):")
+        for line in boilerplate[:5]:
+            print(f"    - {line[:90]!r}")
+    print(f"  {len(pages)} pages remain after cleaning.")
 
     texts: list[str] = []
     payloads: list[dict] = []
