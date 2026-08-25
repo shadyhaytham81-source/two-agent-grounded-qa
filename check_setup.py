@@ -6,9 +6,8 @@ app / test suite:
 
 Verifies, in order:
   1. .env is present and every required variable is set
-  2. the book PDF exists locally and has an extractable text layer
-  3. the LLM provider key works (one tiny request)
-  4. the remote Qdrant cluster is reachable, and how many chunks the
+  2. the LLM provider key works (one tiny request)
+  3. the remote Qdrant cluster is reachable, and how many chunks the
      collection currently holds
 
 Nothing here writes data — it is safe to run at any time.
@@ -41,29 +40,8 @@ def main() -> int:
     ok(f"LLM_MODEL              = {config.LLM_MODEL}")
     ok(f"QDRANT_URL             = {config.QDRANT_URL}")
     ok(f"QDRANT_COLLECTION_NAME = {config.QDRANT_COLLECTION_NAME}")
-    ok(f"BOOK_PDF_PATH          = {config.BOOK_PDF_PATH}")
 
-    print("\n2. Corpus PDF")
-    if not os.path.exists(config.BOOK_PDF_PATH):
-        fail(f"No PDF at '{config.BOOK_PDF_PATH}'. See corpus/README.md.")
-        problems += 1
-    else:
-        import pdfplumber
-
-        with pdfplumber.open(config.BOOK_PDF_PATH) as pdf:
-            total = len(pdf.pages)
-            sample = min(total, 10)
-            with_text = sum(1 for p in pdf.pages[:sample] if (p.extract_text() or "").strip())
-        if with_text == 0:
-            fail(
-                f"{total} pages, but no extractable text in the first {sample} — "
-                f"this looks like a scanned/image-only PDF and needs OCR first."
-            )
-            problems += 1
-        else:
-            ok(f"{total} pages, text layer present ({with_text}/{sample} sampled pages had text)")
-
-    print(f"\n3. LLM provider ({config.LLM_PROVIDER})")
+    print(f"\n2. LLM provider ({config.LLM_PROVIDER})")
     try:
         import llm
 
@@ -77,7 +55,7 @@ def main() -> int:
         fail(f"{type(exc).__name__}: {exc}")
         problems += 1
 
-    print("\n4. Qdrant Cloud")
+    print("\n3. Qdrant Cloud")
     try:
         from qdrant_client import QdrantClient
 
@@ -89,7 +67,7 @@ def main() -> int:
             if count == 0:
                 fail(
                     f"Collection '{config.QDRANT_COLLECTION_NAME}' exists but is empty — "
-                    f"run: python -m ingestion.ingest_pdf"
+                    f"run: python -m ingestion.ingest_docs"
                 )
                 problems += 1
             else:
@@ -97,7 +75,7 @@ def main() -> int:
         else:
             print(
                 f"  [NOTE] Collection '{config.QDRANT_COLLECTION_NAME}' doesn't exist yet — "
-                f"it is created by: python -m ingestion.ingest_pdf"
+                f"it is created by: python -m ingestion.ingest_docs"
             )
     except Exception as exc:  # noqa: BLE001
         fail(f"{type(exc).__name__}: {exc}")
@@ -107,7 +85,7 @@ def main() -> int:
     if problems:
         print(f"{problems} problem(s) found — fix the [FAIL] lines above, then re-run.")
         return 1
-    print("All checks passed. Next: python -m ingestion.ingest_pdf")
+    print("All checks passed. Next: python -m ingestion.ingest_docs")
     return 0
 
 
