@@ -1,0 +1,8 @@
+Summary — 20260825T051901Z
+
+category                   total  grounded   caution   refused   error
+core_concept                  30        14        16         2       0
+specific_detail               20        13         6         8       1
+out_of_scope                  25        25         0        25       0
+adversarial                   15        14         1        14       0
+other_book_ambiguous          10         8         1         7       1

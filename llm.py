@@ -72,17 +72,37 @@ def complete(
         try:
             return _complete_once(system, user, max_tokens, temperature, model or config.LLM_MODEL)
         except Exception as exc:  # noqa: BLE001 — re-raised below unless rate limited
-            if not _is_rate_limit(exc):
+            if not (_is_rate_limit(exc) or _is_transient(exc)):
                 raise
             last_exc = exc
-            delay = _wait_seconds(exc, attempt)
-            print(f"    [rate limited — waiting {delay:.1f}s, attempt {attempt + 1}]")
+            delay = _wait_seconds(exc, attempt) if _is_rate_limit(exc) else min(2**attempt, 30)
+            reason = "rate limited" if _is_rate_limit(exc) else "connection dropped"
+            print(f"    [{reason} — waiting {delay:.1f}s, attempt {attempt + 1}]")
             time.sleep(delay)
     raise last_exc  # type: ignore[misc]
 
 
 def _strip_reasoning(text: str | None) -> str:
-    return _THINK_BLOCK.sub("", text or "").strip()
+    """
+    Backstop for models that still inline a reasoning block. Handles the
+    unclosed case too — a response cut off mid-block has no closing tag, and
+    leaving the opener in would corrupt anything downstream that parses it.
+    """
+    cleaned = _THINK_BLOCK.sub("", text or "")
+    if "<think>" in cleaned:
+        cleaned = cleaned.split("<think>", 1)[0]
+    return cleaned.strip()
+
+
+def _is_transient(exc: Exception) -> bool:
+    """Connection drops and 5xx responses are worth another attempt."""
+    if getattr(exc, "status_code", 0) >= 500:
+        return True
+    text = str(exc).lower()
+    return any(
+        sign in text
+        for sign in ("server disconnected", "connection", "timeout", "temporarily")
+    )
 
 
 def _is_rate_limit(exc: Exception) -> bool:
@@ -100,6 +120,12 @@ def _complete_once(system: str, user: str, max_tokens: int, temperature: float, 
         # the answer — without this a small max_tokens returns empty content.
         if "gpt-oss" in model:
             extra["reasoning_effort"] = config.GROQ_REASONING_EFFORT
+        # Other reasoning models write the reasoning into `content` inside a
+        # <think> block. Asking for it to be hidden is far more robust than
+        # stripping it after the fact: if the model is cut off mid-block it
+        # never emits a closing tag, and the whole response is unparseable.
+        elif "qwen" in model:
+            extra["reasoning_format"] = "hidden"
 
         response = _groq_client().chat.completions.create(
             model=model,

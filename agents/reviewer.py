@@ -87,7 +87,7 @@ def review(query: str, draft: str, passages: list[dict]) -> dict:
             f"Retrieved passages:\n{format_passages(passages)}\n\n"
             f"Draft answer:\n{draft}"
         ),
-        max_tokens=1500,
+        max_tokens=2500,
         model=config.REVIEWER_MODEL,
     )
     result = _safe_parse(raw)
