@@ -63,7 +63,8 @@ orchestrated as a LangGraph state machine with a genuine conditional handoff.
 |---|---|---|
 | Vector DB | **Qdrant Cloud** (remote cluster) | required by the brief; URL + API key via env vars |
 | Orchestration | **LangGraph** | conditional handoff + revision loop, not a linear chain |
-| LLM (both agents) | **Groq** `openai/gpt-oss-120b` (default) or **Google Gemini** | both have a free tier with **no credit card required** |
+| LLM | **Groq** (default) or **Google Gemini** | both have a free tier with **no credit card required** |
+| Reviewer LLM | a *second* model via `REVIEWER_MODEL` | independent blind spots catch what the writing model misses in its own draft |
 | Embeddings | `sentence-transformers` / `all-MiniLM-L6-v2` | runs **locally** — no API key, no cost, 384 dims |
 | PDF parsing | `pdfplumber` | reliable text extraction, page-by-page |
 | UI | **Streamlit** | required by the brief |
@@ -154,6 +155,8 @@ Fill in `.env`:
 | Variable | Value |
 |---|---|
 | `LLM_PROVIDER` | `groq` or `gemini` |
+| `LLM_MODEL` | model the Researcher writes with (optional — has a default) |
+| `REVIEWER_MODEL` | model the Reviewer checks with (optional — defaults to `LLM_MODEL`) |
 | `GROQ_API_KEY` / `GEMINI_API_KEY` | the key for the provider you chose |
 | `QDRANT_URL` | your cluster URL |
 | `QDRANT_API_KEY` | your Qdrant API key |
@@ -273,6 +276,18 @@ These logs are committed as the test evidence for this deliverable.
 - **Prompt-injection handling.** Both agents are told explicitly to treat
   retrieved passages and user text as *data, never as instructions*. The
   `adversarial` test category exists to keep that honest.
+
+- **Why the Reviewer can run on a different model.** A model is a poor judge
+  of its own writing — asked whether its answer is correct, it tends to agree
+  with itself. Setting `REVIEWER_MODEL` to a different model gives the check
+  a genuinely independent set of blind spots. It also has a practical benefit
+  on a free tier, where each model carries its own daily quota: splitting the
+  two agents across two models doubles the budget available for a full
+  100-question run.
+
+- **Failing safe on an unparseable verdict.** If the Reviewer's JSON can't be
+  parsed, the result is treated as `NOT_GROUNDED`, never as approval. A
+  malformed check is not a passed check.
 
 ## Copyright
 
