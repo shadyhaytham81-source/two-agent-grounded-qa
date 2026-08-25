@@ -1,0 +1,8 @@
+Summary — 20260825T203818Z
+
+category                   total  grounded   caution   refused   error
+core_concept                  30        28         2         0       0
+specific_detail               20        18         0         4       2
+out_of_scope                  25        23         0        22       2
+adversarial                   15        12         1         7       2
+other_tool_ambiguous          10         4         0         1       6
